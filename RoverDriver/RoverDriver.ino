@@ -1,9 +1,13 @@
 #include <Adafruit_SoftServo.h>
 #include <NewPing.h>
+#include <SoftwareSerialRxOnly.h>
 
 // Servo control lines (orange)
-#define SERVO_LEFT_PIN 0   
-#define SERVO_RIGHT_PIN 2
+#define SERVO_LEFT_PIN 2   
+#define SERVO_RIGHT_PIN 0
+
+// IR Receiver
+#define RECEIVER_PIN 4
 
 // Values that completely stop the servos
 #define SERVO_LEFT_STOP 90
@@ -19,13 +23,14 @@
 // Ultrasonic sensor pins
 #define SENSOR_TRIGGER_PIN 3
 #define SENSOR_ECHO_PIN 1
-#define SENSOR_POWER_PIN 4
 #define MAX_DISTANCE 300 // Maximum distance we want to ping for (in centimeters). Maximum sensor distance is rated at 400-500cm.
 
 Adafruit_SoftServo servo_left, servo_right;
 NewPing sonar(SENSOR_TRIGGER_PIN, SENSOR_ECHO_PIN, MAX_DISTANCE);
+SoftwareSerialRxOnly receiver(RECEIVER_PIN);
 
 int obstacle_distance;
+bool automaticMode;
 
 void setup() 
 {
@@ -39,24 +44,46 @@ void setup()
   servo_right.attach(SERVO_RIGHT_PIN);
   servo_right.write(SERVO_RIGHT_STOP);
   
-  pinMode(SENSOR_POWER_PIN, OUTPUT);
-  digitalWrite(SENSOR_POWER_PIN, HIGH);
+  // Set up IR receiver
+  receiver.begin(1200);
 
-  moveForward();  
+  // Start in manual mode
+  automaticMode = false;
 } 
 
 void loop() 
-{ 
-  obstacle_distance = sonar.ping_cm();
-
-  if (obstacle_distance < 25 && obstacle_distance > 0) {
-    rotate();
-  }
-  else if (obstacle_distance > 50) {
-    moveForward();
-  }
+{
+  receiveRemoteCommands();
   
-  delay(100);  
+  if (automaticMode)
+  { 
+    obstacle_distance = sonar.ping_cm();
+  
+    if (obstacle_distance < 25 && obstacle_distance > 0) {
+      rotate();
+    }
+    else if (obstacle_distance > 50) {
+      moveForward();
+    }
+    
+    delay(100);
+  }
+}
+
+void receiveRemoteCommands()
+{
+  if (receiver.available())
+  {
+    char code = receiver.read();
+    if (code == 'J')
+    {
+      automaticMode = true;
+    }
+    if (code == 'E')
+    {
+      automaticMode = false;
+    }
+  }
 }
 
 void moveForward()
