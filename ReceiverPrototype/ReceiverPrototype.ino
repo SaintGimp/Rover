@@ -1,23 +1,30 @@
-#include "SoftwareSerial.h"
+//#include "SoftwareSerial.h"
 
-SoftwareSerial mySerial(1, 0);
+#define LED_PIN 9
+//SoftwareSerial mySerial(1, 0);
 
 void setup() {
-  mySerial.begin(1200);
-  pinMode(2, OUTPUT);
+  //mySerial.begin(1200);
+  Serial.begin(1200);  
+  pinMode(LED_PIN, OUTPUT);
 }
 
 void loop() {
-  if (mySerial.available())
+//  digitalWrite(LED_PIN, HIGH);
+//  delay(250);
+//  digitalWrite(LED_PIN, LOW);
+//  delay(250);
+  
+  if (Serial.available())
   {
-    char code = mySerial.read();
+    char code = Serial.read();
     if (code == 'J')
     {
-      digitalWrite(2, HIGH);
+      digitalWrite(LED_PIN, HIGH);
     }
     if (code == 'E')
     {
-      digitalWrite(2, LOW);
+      digitalWrite(LED_PIN, LOW);
     }
   }
 }

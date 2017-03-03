@@ -1,43 +1,40 @@
-#include <Adafruit_SoftServo.h>
+#include <Servo.h>
 #include <NewPing.h>
-#include <SoftwareSerialRxOnly.h>
 
 // Servo control lines (orange)
-#define SERVO_LEFT_PIN 2   
-#define SERVO_RIGHT_PIN 0
-
-// IR Receiver
-#define RECEIVER_PIN 4
+#define SERVO_LEFT_PIN 8   
+#define SERVO_RIGHT_PIN 10
 
 // Values that completely stop the servos
-#define SERVO_LEFT_STOP 90
-#define SERVO_RIGHT_STOP 85
+#define SERVO_LEFT_STOP 85
+#define SERVO_RIGHT_STOP 90
 
 // Values that move the rover forward in a straight line
 #define SERVO_LEFT_FORWARD 180
-#define SERVO_RIGHT_FORWARD 30
+#define SERVO_RIGHT_FORWARD 0
 #define SERVO_LEFT_BACKWARD 0
 #define SERVO_RIGHT_BACKWARD 180
 
-
 // Ultrasonic sensor pins
-#define SENSOR_TRIGGER_PIN 3
-#define SENSOR_ECHO_PIN 1
+#define SENSOR0_TRIGGER_PIN 3
+#define SENSOR0_ECHO_PIN 4
+#define SENSOR1_TRIGGER_PIN 5
+#define SENSOR1_ECHO_PIN 6
 #define MAX_DISTANCE 300 // Maximum distance we want to ping for (in centimeters). Maximum sensor distance is rated at 400-500cm.
 
-Adafruit_SoftServo servo_left, servo_right;
-NewPing sonar(SENSOR_TRIGGER_PIN, SENSOR_ECHO_PIN, MAX_DISTANCE);
-SoftwareSerialRxOnly receiver(RECEIVER_PIN);
+#define DEBUG_LED 9
 
-int obstacle_distance;
+Servo servo_left, servo_right;
+NewPing sonar0(SENSOR0_TRIGGER_PIN, SENSOR0_ECHO_PIN, MAX_DISTANCE);
+NewPing sonar1(SENSOR1_TRIGGER_PIN, SENSOR1_ECHO_PIN, MAX_DISTANCE);
+
+int left_obstacle_distance;
+int right_obstacle_distance;
 bool automaticMode;
+bool isRotating;
 
 void setup() 
 {
-  // Set up the interrupt that will refresh the servo for us automagically
-  OCR0A = 0xAF;            // any number is OK
-  TIMSK |= _BV(OCIE0A);    // Turn on the compare interrupt (below!)
-  
   // Attach servos and default to stopped mode
   servo_left.attach(SERVO_LEFT_PIN);
   servo_left.write(SERVO_LEFT_STOP);
@@ -45,36 +42,59 @@ void setup()
   servo_right.write(SERVO_RIGHT_STOP);
   
   // Set up IR receiver
-  receiver.begin(1200);
+  Serial.begin(1200);
 
   // Start in manual mode
-  automaticMode = false;
+  automaticMode = true;
+
+  pinMode(DEBUG_LED, OUTPUT);
 } 
 
 void loop() 
 {
+  digitalWrite(DEBUG_LED, isRotating);
+  
   receiveRemoteCommands();
   
   if (automaticMode)
   { 
-    obstacle_distance = sonar.ping_cm();
+    left_obstacle_distance = sonar0.ping_cm();
+    delay(10);
+    right_obstacle_distance = sonar1.ping_cm();
   
-    if (obstacle_distance < 25 && obstacle_distance > 0) {
-      rotate();
+    if (!isRotating) {
+      if (isClose(right_obstacle_distance) && !isClose(left_obstacle_distance)) {
+        rotateLeft();
+      }
+      else if (isClose(left_obstacle_distance) && !isClose(right_obstacle_distance)) {
+        rotateRight();
+      }
     }
-    else if (obstacle_distance > 50) {
+    else if (isFar(left_obstacle_distance) && isFar(right_obstacle_distance)) {
       moveForward();
     }
     
     delay(100);
   }
+  else {
+    stop();
+  }
+}
+
+bool isClose(int distance) {
+  return (distance < 25 && distance > 0);
+}
+
+bool isFar(int distance) {
+  return (distance > 30);
 }
 
 void receiveRemoteCommands()
 {
-  if (receiver.available())
+  if (Serial.available())
   {
-    char code = receiver.read();
+    char code = Serial.read();
+    Serial.flush();
     if (code == 'J')
     {
       automaticMode = true;
@@ -90,30 +110,27 @@ void moveForward()
 {
   servo_left.write(SERVO_LEFT_FORWARD);
   servo_right.write(SERVO_RIGHT_FORWARD);
+  isRotating = false;
 }
 
 void stop()
 {
   servo_left.write(SERVO_LEFT_STOP);
   servo_right.write(SERVO_RIGHT_STOP);
+  isRotating = false;
 }
 
-void rotate()
+void rotateRight()
 {
   servo_left.write(SERVO_LEFT_FORWARD);
   servo_right.write(SERVO_RIGHT_BACKWARD);
+  isRotating = true;
 }
 
-// We'll take advantage of the built in millis() timer that goes off
-// to keep track of time, and refresh the servo every 20 milliseconds
-volatile uint8_t counter = 0;
-SIGNAL(TIMER0_COMPA_vect) {
-  // this gets called every 2 milliseconds
-  counter += 2;
-  // every 20 milliseconds, refresh the servos!
-  if (counter >= 20) {
-    counter = 0;
-    servo_left.refresh();
-    servo_right.refresh();
-  }
+void rotateLeft()
+{
+  servo_left.write(SERVO_LEFT_BACKWARD);
+  servo_right.write(SERVO_RIGHT_FORWARD);
+  isRotating = true;
 }
+
